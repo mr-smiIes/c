@@ -302,43 +302,52 @@ public final class OreWorldRenderer {
             float alpha
     ) {
 
-        int color =
-                ((int) (alpha * 255.0f) & 0xFF) << 24
-                        | ((int) (red * 255.0f) & 0xFF) << 16
-                        | ((int) (green * 255.0f) & 0xFF) << 8
-                        | ((int) (blue * 255.0f) & 0xFF);
+        int r = (int) (red * 255.0f);
+        int g = (int) (green * 255.0f);
+        int b = (int) (blue * 255.0f);
+        int a = (int) (alpha * 255.0f);
 
         buffer.addVertex(
+                matrix,
                 x1,
                 y1,
-                z1,
-                color,
-                0.0f,
-                0.0f,
-                0,
-                0,
+                z1
+        )
+        .setColor(
+                r,
+                g,
+                b,
+                a
+        )
+        .setNormal(
                 0.0f,
                 1.0f,
                 0.0f
+        )
+        .setLineWidth(
+                2.0f
         );
-
-        buffer.setLineWidth(2.0f);
 
         buffer.addVertex(
+                matrix,
                 x2,
                 y2,
-                z2,
-                color,
-                0.0f,
-                0.0f,
-                0,
-                0,
+                z2
+        )
+        .setColor(
+                r,
+                g,
+                b,
+                a
+        )
+        .setNormal(
                 0.0f,
                 1.0f,
                 0.0f
+        )
+        .setLineWidth(
+                2.0f
         );
-
-        buffer.setLineWidth(2.0f);
     }
 
     private static void draw(
