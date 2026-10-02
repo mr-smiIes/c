@@ -4,27 +4,29 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
 
-import com.mojang.renderpearl.api.pipeline.PrimitiveTopology;
+import com.mojang.blaze3d.buffers.GpuBuffer;
+import com.mojang.blaze3d.buffers.GpuBufferSlice;
+import com.mojang.blaze3d.pipeline.RenderPipeline;
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.systems.CommandEncoder;
+import com.mojang.blaze3d.systems.RenderPass;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.ByteBufferBuilder;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-
-import com.mojang.renderpearl.api.buffers.GpuBufferSlice;
-import com.mojang.renderpearl.api.commands.RenderPass;
-import com.mojang.renderpearl.api.pipeline.RenderPipeline;
-import com.mojang.renderpearl.api.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexFormat;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
-import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.MappableRingBuffer;
 import net.minecraft.client.renderer.RenderPipelines;
-import net.minecraft.client.renderer.StagedVertexBuffer;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
@@ -43,20 +45,30 @@ public final class OreWorldRenderer {
                     RenderPipeline.builder(
                             RenderPipelines.LINES_SNIPPET
                     )
-                    .withLocation(
-                            Identifier.fromNamespaceAndPath(
-                                    OreHighlighterClient.MOD_ID,
-                                    "pipeline/ore_lines_through_walls"
+                            .withLocation(
+                                    Identifier.fromNamespaceAndPath(
+                                            OreHighlighterClient.MOD_ID,
+                                            "pipeline/ore_lines_through_walls"
+                                    )
                             )
-                    )
-                    .withDepthStencilState(
-                            Optional.empty()
-                    )
-                    .build()
+                            .withDepthStencilState(
+                                    Optional.empty()
+                            )
+                            .build()
+            );
+
+    private static final ByteBufferBuilder ALLOCATOR =
+            new ByteBufferBuilder(
+                    RenderType.SMALL_BUFFER_SIZE
             );
 
     private static final Vector4f COLOR_MODULATOR =
-            new Vector4f(1f, 1f, 1f, 1f);
+            new Vector4f(
+                    1f,
+                    1f,
+                    1f,
+                    1f
+            );
 
     private static final Vector3f MODEL_OFFSET =
             new Vector3f();
@@ -64,11 +76,9 @@ public final class OreWorldRenderer {
     private static final Matrix4f TEXTURE_MATRIX =
             new Matrix4f();
 
-    private static final StagedVertexBuffer STAGED_BUFFER =
-            new StagedVertexBuffer(
-                    () -> "Ore Highlighter Buffer",
-                    RenderType.SMALL_BUFFER_SIZE
-            );
+    private static BufferBuilder buffer;
+
+    private static MappableRingBuffer vertexBuffer;
 
     private static List<OreHighlighterClient.Highlight> highlights =
             List.of();
@@ -78,21 +88,50 @@ public final class OreWorldRenderer {
 
     public static void initialize() {
 
-        LevelExtractionEvents.END_EXTRACTION.register(
-                context -> {
-                    // World data is already collected by the client scanner.
-                }
+        /*
+         * Extraction phase.
+         *
+         * The actual ore list has already been collected by
+         * OreHighlighterClient, so there is nothing to scan here.
+         */
+        LevelRenderEvents.END_EXTRACTION.register(
+                OreWorldRenderer::extractOres
         );
 
+        /*
+         * Drawing phase.
+         */
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(
                 OreWorldRenderer::renderAndDraw
         );
     }
 
-    public static void setHighlights(
-            List<OreHighlighterClient.Highlight> newHighlights
+    private static void extractOres(
+            LevelExtractionContext context
     ) {
-        highlights = newHighlights;
+
+        if (highlights.isEmpty()) {
+            return;
+        }
+
+        /*
+         * Create a fresh BufferBuilder for this frame.
+         */
+        buffer =
+                new BufferBuilder(
+                        ALLOCATOR,
+                        ORE_LINES_THROUGH_WALLS.getVertexFormatMode(),
+                        ORE_LINES_THROUGH_WALLS.getVertexFormat()
+                );
+
+        /*
+         * We cannot use the normal camera position from the world
+         * render context here because extraction and drawing are
+         * separate phases.
+         *
+         * The actual vertex generation is therefore performed in
+         * renderAndDraw(), where the LevelRenderContext is available.
+         */
     }
 
     private static void renderAndDraw(
@@ -100,57 +139,128 @@ public final class OreWorldRenderer {
     ) {
 
         if (highlights.isEmpty()) {
+            cleanupBuffer();
+
             return;
         }
 
-        RenderPipeline pipeline =
-                ORE_LINES_THROUGH_WALLS;
+        /*
+         * The BufferBuilder needs to be created here because this
+         * is where we have access to the camera/render pose.
+         */
+        if (buffer == null) {
 
-        VertexFormat format =
-                pipeline.getVertexFormatBinding(0);
-
-        if (format == null) {
-            return;
+            buffer =
+                    new BufferBuilder(
+                            ALLOCATOR,
+                            ORE_LINES_THROUGH_WALLS.getVertexFormatMode(),
+                            ORE_LINES_THROUGH_WALLS.getVertexFormat()
+                    );
         }
-
-        PrimitiveTopology primitive =
-                pipeline.getPrimitiveTopology();
-
-        StagedVertexBuffer.Draw draw =
-                STAGED_BUFFER.appendDraw(
-                        format,
-                        primitive,
-                        primitive == PrimitiveTopology.QUADS
-                                ? RenderSystem
-                                        .getProjectionType()
-                                        .vertexSorting()
-                                : null
-                );
 
         renderOres(
                 context,
-                draw
+                buffer
         );
 
-        STAGED_BUFFER.upload();
+        MeshData builtBuffer;
 
-        StagedVertexBuffer.ExecuteInfo info =
-                STAGED_BUFFER.getExecuteInfo(draw);
+        try {
+            builtBuffer =
+                    buffer.buildOrThrow();
+        } catch (Exception exception) {
 
-        if (info != null) {
-            draw(
-                    Minecraft.getInstance(),
-                    info,
-                    pipeline
+            buffer = null;
+
+            return;
+        }
+
+        MeshData.DrawState drawState =
+                builtBuffer.drawState();
+
+        VertexFormat format =
+                drawState.format();
+
+        int vertexBufferSize =
+                drawState.vertexCount()
+                        * format.getVertexSize();
+
+        if (
+                vertexBuffer == null
+                        || vertexBuffer.size() < vertexBufferSize
+        ) {
+
+            if (vertexBuffer != null) {
+                vertexBuffer.close();
+            }
+
+            vertexBuffer =
+                    new MappableRingBuffer(
+                            () ->
+                                    OreHighlighterClient.MOD_ID
+                                            + " ore highlight vertex buffer",
+                            GpuBuffer.USAGE_VERTEX
+                                    | GpuBuffer.USAGE_MAP_WRITE,
+                            vertexBufferSize
+                    );
+        }
+
+        /*
+         * Upload vertex data to the GPU.
+         *
+         * This happens before creating our render pass.
+         */
+        CommandEncoder commandEncoder =
+                RenderSystem
+                        .getDevice()
+                        .createCommandEncoder();
+
+        try (
+                GpuBuffer.MappedView mappedView =
+                        commandEncoder.mapBuffer(
+                                vertexBuffer
+                                        .currentBuffer()
+                                        .slice(
+                                                0,
+                                                builtBuffer
+                                                        .vertexBuffer()
+                                                        .remaining()
+                                        ),
+                                false,
+                                true
+                        )
+        ) {
+
+            mappedView.data();
+
+            org.lwjgl.system.MemoryUtil.memCopy(
+                    builtBuffer.vertexBuffer(),
+                    mappedView.data()
             );
         }
 
-        STAGED_BUFFER.endFrame();
+        draw(
+                Minecraft.getInstance(),
+                builtBuffer,
+                drawState,
+                vertexBuffer.currentBuffer(),
+                format
+        );
+
+        /*
+         * Rotate the ring buffer so the GPU can finish using the
+         * previous buffer while the next frame gets another one.
+         */
+        vertexBuffer.rotate();
+
+        builtBuffer.close();
+
+        buffer = null;
     }
 
     private static void renderOres(
             LevelRenderContext context,
-            StagedVertexBuffer.Draw draw
+            BufferBuilder builder
     ) {
 
         PoseStack matrices =
@@ -168,9 +278,6 @@ public final class OreWorldRenderer {
                 -camera.y,
                 -camera.z
         );
-
-        VertexConsumer builder =
-                STAGED_BUFFER.getVertexBuilder(draw);
 
         for (
                 OreHighlighterClient.Highlight highlight
@@ -204,7 +311,7 @@ public final class OreWorldRenderer {
 
     private static void drawBox(
             Matrix4fc matrix,
-            VertexConsumer buffer,
+            BufferBuilder buffer,
 
             float minX,
             float minY,
@@ -221,71 +328,194 @@ public final class OreWorldRenderer {
     ) {
 
         // Bottom
-        line(buffer, matrix,
-                minX, minY, minZ,
-                maxX, minY, minZ,
-                red, green, blue, alpha);
 
-        line(buffer, matrix,
-                maxX, minY, minZ,
-                maxX, minY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                minX,
+                minY,
+                minZ,
+                maxX,
+                minY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                maxX, minY, maxZ,
-                minX, minY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                minY,
+                minZ,
+                maxX,
+                minY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                minX, minY, maxZ,
-                minX, minY, minZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                minY,
+                maxZ,
+                minX,
+                minY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
+
+        line(
+                buffer,
+                matrix,
+                minX,
+                minY,
+                maxZ,
+                minX,
+                minY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
         // Top
-        line(buffer, matrix,
-                minX, maxY, minZ,
-                maxX, maxY, minZ,
-                red, green, blue, alpha);
 
-        line(buffer, matrix,
-                maxX, maxY, minZ,
-                maxX, maxY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                minX,
+                maxY,
+                minZ,
+                maxX,
+                maxY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                maxX, maxY, maxZ,
-                minX, maxY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                maxY,
+                minZ,
+                maxX,
+                maxY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                minX, maxY, maxZ,
-                minX, maxY, minZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                maxY,
+                maxZ,
+                minX,
+                maxY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
+
+        line(
+                buffer,
+                matrix,
+                minX,
+                maxY,
+                maxZ,
+                minX,
+                maxY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
         // Vertical edges
-        line(buffer, matrix,
-                minX, minY, minZ,
-                minX, maxY, minZ,
-                red, green, blue, alpha);
 
-        line(buffer, matrix,
-                maxX, minY, minZ,
-                maxX, maxY, minZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                minX,
+                minY,
+                minZ,
+                minX,
+                maxY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                maxX, minY, maxZ,
-                maxX, maxY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                minY,
+                minZ,
+                maxX,
+                maxY,
+                minZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
 
-        line(buffer, matrix,
-                minX, minY, maxZ,
-                minX, maxY, maxZ,
-                red, green, blue, alpha);
+        line(
+                buffer,
+                matrix,
+                maxX,
+                minY,
+                maxZ,
+                maxX,
+                maxY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
+
+        line(
+                buffer,
+                matrix,
+                minX,
+                minY,
+                maxZ,
+                minX,
+                maxY,
+                maxZ,
+                red,
+                green,
+                blue,
+                alpha
+        );
     }
 
     private static void line(
-            VertexConsumer buffer,
+            BufferBuilder buffer,
             Matrix4fc matrix,
 
             float x1,
@@ -302,30 +532,16 @@ public final class OreWorldRenderer {
             float alpha
     ) {
 
-        int r = (int) (red * 255.0f);
-        int g = (int) (green * 255.0f);
-        int b = (int) (blue * 255.0f);
-        int a = (int) (alpha * 255.0f);
-
         buffer.addVertex(
                 matrix,
                 x1,
                 y1,
                 z1
-        )
-        .setColor(
-                r,
-                g,
-                b,
-                a
-        )
-        .setNormal(
-                0.0f,
-                1.0f,
-                0.0f
-        )
-        .setLineWidth(
-                2.0f
+        ).setColor(
+                red,
+                green,
+                blue,
+                alpha
         );
 
         buffer.addVertex(
@@ -333,34 +549,74 @@ public final class OreWorldRenderer {
                 x2,
                 y2,
                 z2
-        )
-        .setColor(
-                r,
-                g,
-                b,
-                a
-        )
-        .setNormal(
-                0.0f,
-                1.0f,
-                0.0f
-        )
-        .setLineWidth(
-                2.0f
+        ).setColor(
+                red,
+                green,
+                blue,
+                alpha
         );
     }
 
     private static void draw(
             Minecraft client,
-            StagedVertexBuffer.ExecuteInfo info,
-            RenderPipeline pipeline
+            MeshData builtBuffer,
+            MeshData.DrawState drawState,
+            GpuBuffer vertices,
+            VertexFormat format
     ) {
+
+        GpuBuffer indices;
+
+        VertexFormat.IndexType indexType;
+
+        if (
+                ORE_LINES_THROUGH_WALLS
+                        .getVertexFormatMode()
+                        == VertexFormat.Mode.QUADS
+        ) {
+
+            builtBuffer.sortQuads(
+                    ALLOCATOR,
+                    RenderSystem
+                            .getProjectionType()
+                            .vertexSorting()
+            );
+
+            indices =
+                    ORE_LINES_THROUGH_WALLS
+                            .getVertexFormat()
+                            .uploadImmediateIndexBuffer(
+                                    builtBuffer.indexBuffer()
+                            );
+
+            indexType =
+                    builtBuffer
+                            .drawState()
+                            .indexType();
+
+        } else {
+
+            RenderSystem.AutoStorageIndexBuffer shapeIndexBuffer =
+                    RenderSystem.getSequentialBuffer(
+                            ORE_LINES_THROUGH_WALLS
+                                    .getVertexFormatMode()
+                    );
+
+            indices =
+                    shapeIndexBuffer.getBuffer(
+                            drawState.indexCount()
+                    );
+
+            indexType =
+                    shapeIndexBuffer.type();
+        }
 
         GpuBufferSlice dynamicTransforms =
                 RenderSystem
                         .getDynamicUniforms()
                         .writeTransform(
-                                RenderSystem.getModelViewMatrixCopy(),
+                                RenderSystem
+                                        .getModelViewMatrixCopy(),
                                 COLOR_MODULATOR,
                                 MODEL_OFFSET,
                                 TEXTURE_MATRIX
@@ -368,13 +624,6 @@ public final class OreWorldRenderer {
 
         RenderTarget mainTarget =
                 client.gameRenderer.mainRenderTarget();
-
-        var colorTexture =
-                mainTarget.getColorTextureView();
-
-        if (colorTexture == null) {
-            return;
-        }
 
         try (
                 RenderPass renderPass =
@@ -386,7 +635,8 @@ public final class OreWorldRenderer {
                                                 OreHighlighterClient.MOD_ID
                                                         + " ore highlight rendering",
 
-                                        colorTexture,
+                                        mainTarget
+                                                .getColorTextureView(),
 
                                         Optional.empty(),
 
@@ -398,9 +648,7 @@ public final class OreWorldRenderer {
         ) {
 
             renderPass.setPipeline(
-                    RenderSystem.getCompiledPipeline(
-                            pipeline
-                    )
+                    ORE_LINES_THROUGH_WALLS
             );
 
             RenderSystem.bindDefaultUniforms(
@@ -414,25 +662,49 @@ public final class OreWorldRenderer {
 
             renderPass.setVertexBuffer(
                     0,
-                    info.vertexBuffer().slice()
+                    vertices
             );
 
             renderPass.setIndexBuffer(
-                    info.indexBuffer(),
-                    info.indexType()
+                    indices,
+                    indexType
             );
 
             renderPass.drawIndexed(
-                    info.indexCount(),
+                    drawState.indexCount(),
                     1,
-                    info.firstIndex(),
-                    info.baseVertex(),
+                    0,
+                    0,
                     0
             );
         }
     }
 
+    private static void cleanupBuffer() {
+
+        if (buffer != null) {
+
+            buffer = null;
+        }
+    }
+
+    public static void setHighlights(
+            List<OreHighlighterClient.Highlight> newHighlights
+    ) {
+
+        highlights =
+                newHighlights;
+    }
+
     public static void close() {
-        STAGED_BUFFER.close();
+
+        if (vertexBuffer != null) {
+
+            vertexBuffer.close();
+
+            vertexBuffer = null;
+        }
+
+        ALLOCATOR.close();
     }
 }
