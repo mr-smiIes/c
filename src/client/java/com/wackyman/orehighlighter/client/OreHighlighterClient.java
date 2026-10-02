@@ -11,7 +11,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -20,6 +19,8 @@ import java.util.Map;
 public class OreHighlighterClient implements ClientModInitializer {
 
     public static final String MOD_ID = "orehighlighter";
+
+    private static final int MAX_HIGHLIGHTS = 100;
 
     private static final KeyMapping.Category CATEGORY =
             KeyMapping.Category.register(
@@ -239,6 +240,11 @@ public class OreHighlighterClient implements ClientModInitializer {
                         z++
                 ) {
 
+                    // Hard limit: never collect more than 100 ores.
+                    if (found.size() >= MAX_HIGHLIGHTS) {
+                        break;
+                    }
+
                     mutable.set(x, y, z);
 
                     Block block =
@@ -261,6 +267,14 @@ public class OreHighlighterClient implements ClientModInitializer {
                         );
                     }
                 }
+
+                if (found.size() >= MAX_HIGHLIGHTS) {
+                    break;
+                }
+            }
+
+            if (found.size() >= MAX_HIGHLIGHTS) {
+                break;
             }
         }
 
