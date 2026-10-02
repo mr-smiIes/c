@@ -1,99 +1,200 @@
 package com.wackyman.orehighlighter.client;
 
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.text.Text;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
 
 public class OreMenuScreen extends Screen {
-    private ButtonWidget oreButton;
+
+    private Button oreButton;
 
     public OreMenuScreen() {
-        super(Text.literal("ORE HIGHLIGHTER"));
+        super(Component.literal("ORE HIGHLIGHTER"));
     }
 
     @Override
     protected void init() {
-        int panelWidth = 360;
-        int buttonWidth = 300;
-        int buttonLeft = (this.width - buttonWidth) / 2;
 
-        oreButton = ButtonWidget.builder(getOreButtonText(), button -> {
-            OreHighlighterClient.setOreHighlightEnabled(
-                    !OreHighlighterClient.isOreHighlightEnabled()
-            );
-            button.setMessage(getOreButtonText());
-        }).dimensions(
+        int panelWidth = 360;
+
+        int buttonWidth = 300;
+
+        int buttonLeft =
+                (this.width - buttonWidth) / 2;
+
+        oreButton = Button.builder(
+                getOreButtonText(),
+                button -> {
+
+                    OreHighlighterClient
+                            .setOreHighlightEnabled(
+                                    !OreHighlighterClient
+                                            .isOreHighlightEnabled()
+                            );
+
+                    button.setMessage(
+                            getOreButtonText()
+                    );
+                }
+        ).bounds(
                 buttonLeft,
                 this.height / 2 - 10,
                 buttonWidth,
-                28
+                20
         ).build();
 
-        this.addDrawableChild(oreButton);
+        this.addRenderableWidget(
+                oreButton
+        );
     }
 
-    private Text getOreButtonText() {
-        return Text.literal(
+    private Component getOreButtonText() {
+
+        return Component.literal(
                 "ORE HIGHLIGHT   [" +
-                (OreHighlighterClient.isOreHighlightEnabled() ? "ON" : "OFF") +
-                "]"
+                        (
+                                OreHighlighterClient
+                                        .isOreHighlightEnabled()
+                                        ? "ON"
+                                        : "OFF"
+                        ) +
+                        "]"
         );
     }
 
     @Override
-    public void render(DrawContext context, int mouseX, int mouseY, float delta) {
-        context.fill(0, 0, this.width, this.height, 0xB0101016);
+    public void extractRenderState(
+            GuiGraphicsExtractor graphics,
+            int mouseX,
+            int mouseY,
+            float delta
+    ) {
+
+        super.extractRenderState(
+                graphics,
+                mouseX,
+                mouseY,
+                delta
+        );
 
         int panelWidth = 360;
         int panelHeight = 190;
-        int left = (this.width - panelWidth) / 2;
-        int top = (this.height - panelHeight) / 2;
-        int right = left + panelWidth;
-        int bottom = top + panelHeight;
 
-        context.fill(left + 4, top + 4, right + 4, bottom + 4, 0x55000000);
-        context.fill(left, top, right, bottom, 0xE91A1B22);
-        context.fill(left, top, right, top + 3, 0xFF63D8FF);
-        context.fill(left, bottom - 2, right, bottom, 0xFF272A35);
+        int left =
+                (this.width - panelWidth) / 2;
 
-        context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                Text.literal("ORE HIGHLIGHTER"),
-                this.width / 2,
+        int top =
+                (this.height - panelHeight) / 2;
+
+        int right =
+                left + panelWidth;
+
+        int bottom =
+                top + panelHeight;
+
+        graphics.fill(
+                0,
+                0,
+                this.width,
+                this.height,
+                0xB0101016
+        );
+
+        graphics.fill(
+                left + 4,
+                top + 4,
+                right + 4,
+                bottom + 4,
+                0x55000000
+        );
+
+        graphics.fill(
+                left,
+                top,
+                right,
+                bottom,
+                0xE91A1B22
+        );
+
+        graphics.fill(
+                left,
+                top,
+                right,
+                top + 3,
+                0xFF63D8FF
+        );
+
+        graphics.fill(
+                left,
+                bottom - 2,
+                right,
+                bottom,
+                0xFF272A35
+        );
+
+        Component title =
+                Component.literal(
+                        "ORE HIGHLIGHTER"
+                );
+
+        graphics.text(
+                this.font,
+                title,
+                this.width / 2
+                        - this.font.width(title) / 2,
                 top + 22,
-                0xFFFFFFFF
+                0xFFFFFFFF,
+                true
         );
 
-        context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                Text.literal("CLIENT-SIDE"),
-                this.width / 2,
+        Component subtitle =
+                Component.literal(
+                        "CLIENT-SIDE"
+                );
+
+        graphics.text(
+                this.font,
+                subtitle,
+                this.width / 2
+                        - this.font.width(subtitle) / 2,
                 top + 40,
-                0xFF8C93A6
+                0xFF8C93A6,
+                false
         );
 
-        context.drawTextWithShadow(
-                this.textRenderer,
-                Text.literal("Colored outlines for nearby ores"),
+        Component description =
+                Component.literal(
+                        "Colored outlines for nearby ores"
+                );
+
+        graphics.text(
+                this.font,
+                description,
                 left + 30,
                 top + 70,
-                0xFFD9DCE5
+                0xFFD9DCE5,
+                true
         );
 
-        context.drawCenteredTextWithShadow(
-                this.textRenderer,
-                Text.literal("K  •  Toggle menu"),
-                this.width / 2,
+        Component footer =
+                Component.literal(
+                        "K  •  Toggle menu"
+                );
+
+        graphics.text(
+                this.font,
+                footer,
+                this.width / 2
+                        - this.font.width(footer) / 2,
                 bottom - 22,
-                0xFF777D8D
+                0xFF777D8D,
+                false
         );
-
-        super.render(context, mouseX, mouseY, delta);
     }
 
     @Override
-    public boolean shouldPause() {
+    public boolean isPauseScreen() {
         return false;
     }
 }
