@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "orehighlighter",
+  "version": "${version}",
+  "name": "Ore Highlighter",
+  "description": "Client-side ore highlighting with a K-key menu.",
+  "authors": ["wacky man + ChatGPT"],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.wackyman.orehighlighter.client.OreHighlighterClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.5",
+    "minecraft": "26.3",
+    "fabric-api": "*"
+  }
+}
