@@ -285,57 +285,62 @@ public final class OreWorldRenderer {
     }
 
     private static void line(
-        VertexConsumer buffer,
-        Matrix4fc matrix,
+            VertexConsumer buffer,
+            Matrix4fc matrix,
 
-        float x1,
-        float y1,
-        float z1,
+            float x1,
+            float y1,
+            float z1,
 
-        float x2,
-        float y2,
-        float z2,
+            float x2,
+            float y2,
+            float z2,
 
-        float red,
-        float green,
-        float blue,
-        float alpha
-) {
-    int color = (
-            ((int) (alpha * 255.0f) & 0xFF) << 24
-                    | ((int) (red * 255.0f) & 0xFF) << 16
-                    | ((int) (green * 255.0f) & 0xFF) << 8
-                    | ((int) (blue * 255.0f) & 0xFF)
-    );
+            float red,
+            float green,
+            float blue,
+            float alpha
+    ) {
 
-    buffer.addVertex(
-            x1,
-            y1,
-            z1,
-            color,
-            0.0f,
-            0.0f,
-            0,
-            0,
-            0.0f,
-            1.0f,
-            0.0f
-    ).setLineWidth(2.0f);
+        int color =
+                ((int) (alpha * 255.0f) & 0xFF) << 24
+                        | ((int) (red * 255.0f) & 0xFF) << 16
+                        | ((int) (green * 255.0f) & 0xFF) << 8
+                        | ((int) (blue * 255.0f) & 0xFF);
 
-    buffer.addVertex(
-            x2,
-            y2,
-            z2,
-            color,
-            0.0f,
-            0.0f,
-            0,
-            0,
-            0.0f,
-            1.0f,
-            0.0f
-    ).setLineWidth(2.0f);
-}
+        buffer.addVertex(
+                x1,
+                y1,
+                z1,
+                color,
+                0.0f,
+                0.0f,
+                0,
+                0,
+                0.0f,
+                1.0f,
+                0.0f
+        );
+
+        buffer.setLineWidth(2.0f);
+
+        buffer.addVertex(
+                x2,
+                y2,
+                z2,
+                color,
+                0.0f,
+                0.0f,
+                0,
+                0,
+                0.0f,
+                1.0f,
+                0.0f
+        );
+
+        buffer.setLineWidth(2.0f);
+    }
+
     private static void draw(
             Minecraft client,
             StagedVertexBuffer.ExecuteInfo info,
