@@ -10,7 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import org.lwjgl.glfw.GLFW;
+
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -58,8 +58,8 @@ public class OreHighlighterClient implements ClientModInitializer {
         openMenuKey = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.orehighlighter.open_menu",
-                        InputConstants.Type.KEYSYM,
-                        GLFW.GLFW_KEY_K,
+                        InputConstants.Type.KEYBOARD,
+                        InputConstants.KEY_K,
                         CATEGORY
                 )
         );
@@ -67,7 +67,7 @@ public class OreHighlighterClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
 
             while (openMenuKey.consumeClick()) {
-                client.setScreen(new OreMenuScreen());
+                client.gui.setScreen(new OreMenuScreen());
             }
 
             if (
