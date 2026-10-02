@@ -285,47 +285,59 @@ public final class OreWorldRenderer {
     }
 
     private static void line(
-            VertexConsumer buffer,
-            Matrix4fc matrix,
+        VertexConsumer buffer,
+        Matrix4fc matrix,
 
-            float x1,
-            float y1,
-            float z1,
+        float x1,
+        float y1,
+        float z1,
 
-            float x2,
-            float y2,
-            float z2,
+        float x2,
+        float y2,
+        float z2,
 
-            float red,
-            float green,
-            float blue,
-            float alpha
-    ) {
+        float red,
+        float green,
+        float blue,
+        float alpha
+) {
 
-        buffer.addVertex(
-                matrix,
-                x1,
-                y1,
-                z1
-        ).setColor(
-                red,
-                green,
-                blue,
-                alpha
-        );
+    buffer.addVertex(
+            matrix,
+            x1,
+            y1,
+            z1
+    ).setColor(
+            red,
+            green,
+            blue,
+            alpha
+    ).setNormal(
+            0.0f,
+            1.0f,
+            0.0f
+    ).setLineWidth(
+            2.0f
+    );
 
-        buffer.addVertex(
-                matrix,
-                x2,
-                y2,
-                z2
-        ).setColor(
-                red,
-                green,
-                blue,
-                alpha
-        );
-    }
+    buffer.addVertex(
+            matrix,
+            x2,
+            y2,
+            z2
+    ).setColor(
+            red,
+            green,
+            blue,
+            alpha
+    ).setNormal(
+            0.0f,
+            1.0f,
+            0.0f
+    ).setLineWidth(
+            2.0f
+    );
+}
 
     private static void draw(
             Minecraft client,
