@@ -19,6 +19,8 @@ import com.mojang.renderpearl.api.vertex.VertexFormat;
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
 
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionContext;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 
@@ -39,13 +41,10 @@ import org.joml.Vector4f;
 public final class OreWorldRenderer {
 
     /*
-     * Minecraft 26.3's own LINES_SNIPPET uses:
+     * Vanilla line pipeline, but with no depth/stencil state.
      *
-     * POSITION_COLOR_NORMAL_LINE_WIDTH
-     * PrimitiveTopology.LINES
-     *
-     * We keep the vanilla line shaders, but remove the depth test
-     * so ore outlines can be seen through blocks.
+     * Removing the depth test is what allows the ore outlines
+     * to remain visible through blocks.
      */
     private static final RenderPipeline ORE_LINES_THROUGH_WALLS =
             RenderPipelines.register(
@@ -65,9 +64,12 @@ public final class OreWorldRenderer {
             );
 
     /*
-     * The buffer format is explicitly the exact 26.3 line format.
+     * Exact Minecraft 26.3 line vertex format:
      *
-     * This is intentionally NOT obtained from the pipeline at runtime.
+     * Position
+     * Color
+     * Normal
+     * LineWidth
      */
     private static final VertexFormat LINE_VERTEX_FORMAT =
             DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH;
@@ -80,6 +82,14 @@ public final class OreWorldRenderer {
                     () -> "Ore Highlighter Buffer",
                     RenderType.SMALL_BUFFER_SIZE
             );
+
+    /*
+     * The ExecuteInfo produced during extraction.
+     *
+     * It is uploaded during END_EXTRACTION and consumed later
+     * during the actual render event.
+     */
+    private static StagedVertexBuffer.ExecuteInfo pendingDraw;
 
     private static List<OreHighlighterClient.Highlight> highlights =
             List.of();
@@ -103,6 +113,22 @@ public final class OreWorldRenderer {
 
     public static void initialize() {
 
+        /*
+         * EXTRACTION PHASE
+         *
+         * This happens before Minecraft begins drawing render passes.
+         * GPU buffer uploads are safe here.
+         */
+        LevelExtractionEvents.END_EXTRACTION.register(
+                OreWorldRenderer::extract
+        );
+
+        /*
+         * DRAWING PHASE
+         *
+         * This happens after terrain rendering has started.
+         * Only actual draw commands happen here.
+         */
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(
                 OreWorldRenderer::render
         );
@@ -123,17 +149,25 @@ public final class OreWorldRenderer {
         highlights = List.copyOf(newHighlights);
     }
 
-    private static void render(
-            LevelRenderContext context
+    /*
+     * ============================================================
+     * EXTRACTION PHASE
+     * ============================================================
+     *
+     * Build and upload the vertex buffer here.
+     *
+     * This is intentionally NOT done inside AFTER_TRANSLUCENT_TERRAIN.
+     */
+    private static void extract(
+            LevelExtractionContext context
     ) {
+
+        pendingDraw = null;
 
         if (highlights.isEmpty()) {
             return;
         }
 
-        /*
-         * Use the exact Minecraft 26.3 line vertex format.
-         */
         StagedVertexBuffer.Draw draw =
                 STAGED_BUFFER.appendDraw(
                         LINE_VERTEX_FORMAT,
@@ -145,41 +179,68 @@ public final class OreWorldRenderer {
                 draw
         );
 
+        /*
+         * IMPORTANT:
+         *
+         * upload() performs GPU buffer commands.
+         *
+         * END_EXTRACTION is the correct place for this because
+         * Minecraft has not entered the render pass yet.
+         */
         STAGED_BUFFER.upload();
 
-        StagedVertexBuffer.ExecuteInfo info =
+        pendingDraw =
                 STAGED_BUFFER.getExecuteInfo(draw);
+    }
 
-        if (info != null) {
+    /*
+     * ============================================================
+     * DRAWING PHASE
+     * ============================================================
+     */
+    private static void render(
+            LevelRenderContext context
+    ) {
 
-            draw(
-                    Minecraft.getInstance(),
-                    info,
-                    ORE_LINES_THROUGH_WALLS
-            );
+        if (pendingDraw == null) {
+            STAGED_BUFFER.endFrame();
+            return;
         }
 
+        draw(
+                Minecraft.getInstance(),
+                pendingDraw,
+                ORE_LINES_THROUGH_WALLS
+        );
+
+        pendingDraw = null;
+
+        /*
+         * Finish this frame's staged-buffer work only after
+         * the draw has been submitted.
+         */
         STAGED_BUFFER.endFrame();
     }
 
     private static void renderOres(
-            LevelRenderContext context,
+            LevelExtractionContext context,
             StagedVertexBuffer.Draw draw
     ) {
 
-        PoseStack poseStack =
-                context.poseStack();
-
         Vec3 camera =
-                context.levelState()
-                        .cameraRenderState
-                        .pos;
-
-        poseStack.pushPose();
+                context.camera()
+                        .getPosition();
 
         /*
-         * Convert world coordinates into camera-relative coordinates.
+         * We still use a PoseStack because VertexConsumer expects
+         * transformed coordinates.
+         *
+         * The extraction context gives us the camera position
+         * directly.
          */
+        PoseStack poseStack =
+                new PoseStack();
+
         poseStack.translate(
                 -camera.x,
                 -camera.y,
@@ -218,8 +279,6 @@ public final class OreWorldRenderer {
                     1.0f
             );
         }
-
-        poseStack.popPose();
     }
 
     private static void drawBox(
@@ -365,14 +424,12 @@ public final class OreWorldRenderer {
     ) {
 
         /*
-         * Minecraft 26.3's line format is:
+         * Minecraft 26.3 line vertex order:
          *
-         * Position
-         * Color
-         * Normal
-         * LineWidth
-         *
-         * Every vertex MUST provide all four.
+         * POSITION
+         * COLOR
+         * NORMAL
+         * LINE_WIDTH
          */
 
         buffer.addVertex(
@@ -501,6 +558,8 @@ public final class OreWorldRenderer {
     }
 
     public static void close() {
+
+        pendingDraw = null;
 
         STAGED_BUFFER.close();
 
