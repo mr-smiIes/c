@@ -228,8 +228,9 @@ public final class OreWorldRenderer {
     ) {
 
         Vec3 camera =
-                context.camera()
-                        .getPosition();
+        context.levelState()
+                .cameraRenderState
+                .pos;
 
         /*
          * We still use a PoseStack because VertexConsumer expects
