@@ -1,3 +1,4 @@
+```java
 package com.wackyman.orehighlighter.client;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -15,8 +16,6 @@ public class OreMenuScreen extends Screen {
 
     @Override
     protected void init() {
-
-        int panelWidth = 360;
 
         int buttonWidth = 300;
 
@@ -71,13 +70,6 @@ public class OreMenuScreen extends Screen {
             float delta
     ) {
 
-        super.extractRenderState(
-                graphics,
-                mouseX,
-                mouseY,
-                delta
-        );
-
         int panelWidth = 360;
         int panelHeight = 190;
 
@@ -92,6 +84,14 @@ public class OreMenuScreen extends Screen {
 
         int bottom =
                 top + panelHeight;
+
+        /*
+         * Draw the GUI background FIRST.
+         *
+         * This is important because super.extractRenderState()
+         * extracts the buttons/widgets. If the panel is drawn
+         * after super(), it covers the button.
+         */
 
         graphics.fill(
                 0,
@@ -133,6 +133,10 @@ public class OreMenuScreen extends Screen {
                 0xFF272A35
         );
 
+        /*
+         * Title.
+         */
+
         Component title =
                 Component.literal(
                         "ORE HIGHLIGHTER"
@@ -147,6 +151,10 @@ public class OreMenuScreen extends Screen {
                 0xFFFFFFFF,
                 true
         );
+
+        /*
+         * Subtitle.
+         */
 
         Component subtitle =
                 Component.literal(
@@ -163,6 +171,10 @@ public class OreMenuScreen extends Screen {
                 false
         );
 
+        /*
+         * Description.
+         */
+
         Component description =
                 Component.literal(
                         "Colored outlines for nearby ores"
@@ -176,6 +188,10 @@ public class OreMenuScreen extends Screen {
                 0xFFD9DCE5,
                 true
         );
+
+        /*
+         * Footer.
+         */
 
         Component footer =
                 Component.literal(
@@ -191,6 +207,19 @@ public class OreMenuScreen extends Screen {
                 0xFF777D8D,
                 false
         );
+
+        /*
+         * IMPORTANT:
+         *
+         * Extract the widgets LAST so the button appears
+         * above the custom GUI background.
+         */
+        super.extractRenderState(
+                graphics,
+                mouseX,
+                mouseY,
+                delta
+        );
     }
 
     @Override
@@ -198,3 +227,4 @@ public class OreMenuScreen extends Screen {
         return false;
     }
 }
+```
