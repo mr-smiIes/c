@@ -3,6 +3,7 @@ package com.wackyman.orehighlighter.client;
 import java.util.List;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -11,6 +12,9 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -67,6 +71,9 @@ public final class OreWorldRenderer {
                         .cameraRenderState
                         .pos;
 
+        SubmitNodeCollector collector =
+                context.submitNodeCollector();
+
         matrices.pushPose();
 
         for (
@@ -86,20 +93,28 @@ public final class OreWorldRenderer {
                             pos.getZ() + 1.0 - camera.z
                     );
 
-            WorldRendererAccess.drawBox(
+            float r = highlight.r();
+            float g = highlight.g();
+            float b = highlight.b();
+
+            collector.submitCustomGeometry(
                     matrices,
-                    context.bufferSource(),
-                    box,
-                    highlight.r(),
-                    highlight.g(),
-                    highlight.b(),
-                    1.0f
+                    RenderTypes.lines(),
+                    (pose, consumer) -> {
+                        WorldRendererAccess.drawBox(
+                                pose,
+                                consumer,
+                                box,
+                                r,
+                                g,
+                                b,
+                                1.0f
+                        );
+                    }
             );
         }
 
         matrices.popPose();
-
-        context.bufferSource().endBatch();
     }
 
     public static void close() {
