@@ -85,9 +85,9 @@ public class OreHighlighterClient implements ClientModInitializer {
             }
         });
 
-        LevelRenderEvents.COLLECT_SUBMITS.register(
-    context -> WorldRendererAccess.renderHighlights(context)
-);
+        LevelRenderEvents.COLLECT_SUBMITS.register(context -> {
+    System.out.println(context.getClass().getName());
+});
     }
 
     private static void registerOreColors() {
