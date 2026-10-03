@@ -4,8 +4,9 @@ import com.mojang.blaze3d.platform.InputConstants;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
-import net.minecraft.client.Minecraft;
+import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 import net.minecraft.client.KeyMapping;
+import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.Block;
@@ -36,30 +37,29 @@ public class OreHighlighterClient implements ClientModInitializer {
 
     private static int scanTimer = 0;
 
-    public record Highlight(
-            BlockPos pos,
-            float r,
-            float g,
-            float b
-    ) {}
-
     private static final List<Highlight> highlights =
             new ArrayList<>();
 
     private static final Map<Block, float[]> ORE_COLORS =
             new HashMap<>();
 
+    public record Highlight(
+            BlockPos pos,
+            float r,
+            float g,
+            float b
+    ) {
+    }
+
     @Override
     public void onInitializeClient() {
 
         registerOreColors();
 
-        OreWorldRenderer.initialize();
-
         openMenuKey = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.orehighlighter.open_menu",
-                        InputConstants.Type.KEYBOARD,
+                        InputConstants.Type.KEYSYM,
                         InputConstants.KEY_K,
                         CATEGORY
                 )
@@ -68,7 +68,7 @@ public class OreHighlighterClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
 
             while (openMenuKey.consumeClick()) {
-                client.gui.setScreen(new OreMenuScreen());
+                client.setScreen(new OreMenuScreen());
             }
 
             if (
@@ -86,13 +86,11 @@ public class OreHighlighterClient implements ClientModInitializer {
 
                 highlights.clear();
             }
-
-            OreWorldRenderer.setHighlights(
-                    oreHighlightEnabled
-                            ? List.copyOf(highlights)
-                            : List.of()
-            );
         });
+
+        LevelRenderEvents.AFTER_ENTITIES.register(
+                context -> renderOres(context)
+        );
     }
 
     private static void registerOreColors() {
@@ -198,7 +196,11 @@ public class OreHighlighterClient implements ClientModInitializer {
             float g,
             float b
     ) {
-        return new float[]{r, g, b};
+        return new float[]{
+                r,
+                g,
+                b
+        };
     }
 
     private static void scanOres(Minecraft client) {
@@ -240,7 +242,6 @@ public class OreHighlighterClient implements ClientModInitializer {
                         z++
                 ) {
 
-                    // Hard limit: never collect more than 100 ores.
                     if (found.size() >= MAX_HIGHLIGHTS) {
                         break;
                     }
@@ -282,6 +283,20 @@ public class OreHighlighterClient implements ClientModInitializer {
         highlights.addAll(found);
     }
 
+    private static void renderOres(
+            LevelRenderEvents.AfterEntities context
+    ) {
+
+        if (!oreHighlightEnabled || highlights.isEmpty()) {
+            return;
+        }
+
+        WorldRendererAccess.renderHighlights(
+                context,
+                List.copyOf(highlights)
+        );
+    }
+
     public static boolean isOreHighlightEnabled() {
         return oreHighlightEnabled;
     }
@@ -291,6 +306,7 @@ public class OreHighlighterClient implements ClientModInitializer {
     ) {
 
         oreHighlightEnabled = enabled;
+
         scanTimer = 0;
 
         if (!enabled) {
