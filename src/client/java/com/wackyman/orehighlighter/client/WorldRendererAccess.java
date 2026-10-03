@@ -2,11 +2,9 @@ package com.wackyman.orehighlighter.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
-import net.fabricmc.api.client.rendering.v1.level.LevelRenderEvents;
+import net.fabricmc.api.client.rendering.v1.level.LevelRenderContext;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.world.phys.AABB;
-
-import java.util.List;
 
 public final class WorldRendererAccess {
 
@@ -14,9 +12,15 @@ public final class WorldRendererAccess {
     }
 
     public static void renderHighlights(
-            LevelRenderEvents.AfterEntities context,
-            List<OreHighlighterClient.Highlight> highlights
+            LevelRenderContext context
     ) {
+
+        if (
+                !OreHighlighterClient.isOreHighlightEnabled()
+                        || OreHighlighterClient.getHighlights().isEmpty()
+        ) {
+            return;
+        }
 
         PoseStack matrices =
                 context.poseStack();
@@ -24,55 +28,49 @@ public final class WorldRendererAccess {
         var collector =
                 context.submitNodeCollector();
 
+        double cameraX =
+                context.levelState()
+                        .cameraRenderState
+                        .pos
+                        .x;
+
+        double cameraY =
+                context.levelState()
+                        .cameraRenderState
+                        .pos
+                        .y;
+
+        double cameraZ =
+                context.levelState()
+                        .cameraRenderState
+                        .pos
+                        .z;
+
         for (
                 OreHighlighterClient.Highlight highlight :
-                highlights
+                OreHighlighterClient.getHighlights()
         ) {
 
-            AABB box =
-                    new AABB(
-                            highlight.pos()
-                                    .getX(),
-                            highlight.pos()
-                                    .getY(),
-                            highlight.pos()
-                                    .getZ(),
-                            highlight.pos()
-                                    .getX() + 1.0,
-                            highlight.pos()
-                                    .getY() + 1.0,
-                            highlight.pos()
-                                    .getZ() + 1.0
-                    );
-
-            double cameraX =
-                    context.levelState()
-                            .cameraRenderState
-                            .pos
-                            .x;
-
-            double cameraY =
-                    context.levelState()
-                            .cameraRenderState
-                            .pos
-                            .y;
-
-            double cameraZ =
-                    context.levelState()
-                            .cameraRenderState
-                            .pos
-                            .z;
-
-            AABB relativeBox =
-                    box.move(
-                            -cameraX,
-                            -cameraY,
-                            -cameraZ
+            BlockPosData pos =
+                    new BlockPosData(
+                            highlight.pos().getX() - cameraX,
+                            highlight.pos().getY() - cameraY,
+                            highlight.pos().getZ() - cameraZ
                     );
 
             float red = highlight.r();
             float green = highlight.g();
             float blue = highlight.b();
+
+            AABB box =
+                    new AABB(
+                            pos.x,
+                            pos.y,
+                            pos.z,
+                            pos.x + 1.0,
+                            pos.y + 1.0,
+                            pos.z + 1.0
+                    );
 
             collector.submitCustomGeometry(
                     matrices,
@@ -81,7 +79,7 @@ public final class WorldRendererAccess {
                             drawBox(
                                     pose,
                                     consumer,
-                                    relativeBox,
+                                    box,
                                     red,
                                     green,
                                     blue,
@@ -101,185 +99,65 @@ public final class WorldRendererAccess {
             float alpha
     ) {
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.minY,
-                box.minZ,
-                box.maxX,
-                box.minY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.minY, box.minZ,
+                box.maxX, box.minY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.minY,
-                box.minZ,
-                box.maxX,
-                box.minY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.minY, box.minZ,
+                box.maxX, box.minY, box.maxZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.minY,
-                box.maxZ,
-                box.minX,
-                box.minY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.minY, box.maxZ,
+                box.minX, box.minY, box.maxZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.minY,
-                box.maxZ,
-                box.minX,
-                box.minY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.minY, box.maxZ,
+                box.minX, box.minY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.maxY,
-                box.minZ,
-                box.maxX,
-                box.maxY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.maxY, box.minZ,
+                box.maxX, box.maxY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.maxY,
-                box.minZ,
-                box.maxX,
-                box.maxY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.maxY, box.minZ,
+                box.maxX, box.maxY, box.maxZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.maxY,
-                box.maxZ,
-                box.minX,
-                box.maxY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.maxY, box.maxZ,
+                box.minX, box.maxY, box.maxZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.maxY,
-                box.maxZ,
-                box.minX,
-                box.maxY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.maxY, box.maxZ,
+                box.minX, box.maxY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.minY,
-                box.minZ,
-                box.minX,
-                box.maxY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.minY, box.minZ,
+                box.minX, box.maxY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.minY,
-                box.minZ,
-                box.maxX,
-                box.maxY,
-                box.minZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.minY, box.minZ,
+                box.maxX, box.maxY, box.minZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.maxX,
-                box.minY,
-                box.maxZ,
-                box.maxX,
-                box.maxY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.maxX, box.minY, box.maxZ,
+                box.maxX, box.maxY, box.maxZ,
+                red, green, blue, alpha);
 
-        line(
-                consumer,
-                pose,
-                box.minX,
-                box.minY,
-                box.maxZ,
-                box.minX,
-                box.maxY,
-                box.maxZ,
-                red,
-                green,
-                blue,
-                alpha
-        );
+        line(consumer, pose,
+                box.minX, box.minY, box.maxZ,
+                box.minX, box.maxY, box.maxZ,
+                red, green, blue, alpha);
     }
 
     private static void line(
@@ -297,20 +175,15 @@ public final class WorldRendererAccess {
             float alpha
     ) {
 
-        float dx =
-                (float) (x2 - x1);
-
-        float dy =
-                (float) (y2 - y1);
-
-        float dz =
-                (float) (z2 - z1);
+        float dx = (float) (x2 - x1);
+        float dy = (float) (y2 - y1);
+        float dz = (float) (z2 - z1);
 
         float length =
                 (float) Math.sqrt(
-                        dx * dx
-                                + dy * dy
-                                + dz * dz
+                        dx * dx +
+                        dy * dy +
+                        dz * dz
                 );
 
         if (length == 0.0f) {
@@ -360,5 +233,12 @@ public final class WorldRendererAccess {
                         dy,
                         dz
                 );
+    }
+
+    private record BlockPosData(
+            double x,
+            double y,
+            double z
+    ) {
     }
 }
