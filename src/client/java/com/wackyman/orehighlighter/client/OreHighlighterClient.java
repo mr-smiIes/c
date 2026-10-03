@@ -59,7 +59,7 @@ public class OreHighlighterClient implements ClientModInitializer {
         openMenuKey = KeyMappingHelper.registerKeyMapping(
                 new KeyMapping(
                         "key.orehighlighter.open_menu",
-                        InputConstants.Type.KEYSYM,
+                        InputConstants.Type.KEYBOARD,
                         InputConstants.KEY_K,
                         CATEGORY
                 )
@@ -68,7 +68,7 @@ public class OreHighlighterClient implements ClientModInitializer {
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
 
             while (openMenuKey.consumeClick()) {
-                client.setScreen(new OreMenuScreen());
+                client.gui.setScreen(new OreMenuScreen());
             }
 
             if (
@@ -76,119 +76,50 @@ public class OreHighlighterClient implements ClientModInitializer {
                             && client.level != null
                             && client.player != null
             ) {
-
                 if (++scanTimer >= 8) {
                     scanTimer = 0;
                     scanOres(client);
                 }
-
             } else if (!oreHighlightEnabled) {
-
                 highlights.clear();
             }
         });
 
-        LevelRenderEvents.AFTER_ENTITIES.register(
-                context -> renderOres(context)
+        LevelRenderEvents.COLLECT_SUBMITS.register(
+                WorldRendererAccess::renderHighlights
         );
     }
 
     private static void registerOreColors() {
 
-        ORE_COLORS.put(
-                Blocks.COAL_ORE,
-                rgb(.10f, .10f, .10f)
-        );
+        ORE_COLORS.put(Blocks.COAL_ORE, rgb(.10f, .10f, .10f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_COAL_ORE, rgb(.16f, .16f, .16f));
 
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_COAL_ORE,
-                rgb(.16f, .16f, .16f)
-        );
+        ORE_COLORS.put(Blocks.IRON_ORE, rgb(.95f, .95f, .95f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_IRON_ORE, rgb(.85f, .85f, .90f));
 
-        ORE_COLORS.put(
-                Blocks.IRON_ORE,
-                rgb(.95f, .95f, .95f)
-        );
+        ORE_COLORS.put(Blocks.COPPER_ORE, rgb(1f, .45f, .15f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_COPPER_ORE, rgb(1f, .35f, .20f));
 
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_IRON_ORE,
-                rgb(.85f, .85f, .90f)
-        );
+        ORE_COLORS.put(Blocks.GOLD_ORE, rgb(1f, .80f, .05f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_GOLD_ORE, rgb(1f, .65f, .02f));
 
-        ORE_COLORS.put(
-                Blocks.COPPER_ORE,
-                rgb(1f, .45f, .15f)
-        );
+        ORE_COLORS.put(Blocks.REDSTONE_ORE, rgb(1f, .05f, .03f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_REDSTONE_ORE, rgb(1f, .03f, .05f));
 
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_COPPER_ORE,
-                rgb(1f, .35f, .20f)
-        );
+        ORE_COLORS.put(Blocks.LAPIS_ORE, rgb(.10f, .30f, 1f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_LAPIS_ORE, rgb(.08f, .22f, .90f));
 
-        ORE_COLORS.put(
-                Blocks.GOLD_ORE,
-                rgb(1f, .80f, .05f)
-        );
+        ORE_COLORS.put(Blocks.DIAMOND_ORE, rgb(.10f, .95f, 1f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_DIAMOND_ORE, rgb(.05f, .80f, 1f));
 
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_GOLD_ORE,
-                rgb(1f, .65f, .02f)
-        );
+        ORE_COLORS.put(Blocks.EMERALD_ORE, rgb(.05f, 1f, .30f));
+        ORE_COLORS.put(Blocks.DEEPSLATE_EMERALD_ORE, rgb(.03f, .90f, .25f));
 
-        ORE_COLORS.put(
-                Blocks.REDSTONE_ORE,
-                rgb(1f, .05f, .03f)
-        );
+        ORE_COLORS.put(Blocks.NETHER_GOLD_ORE, rgb(1f, .65f, .02f));
+        ORE_COLORS.put(Blocks.NETHER_QUARTZ_ORE, rgb(1f, .85f, .75f));
 
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_REDSTONE_ORE,
-                rgb(1f, .03f, .05f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.LAPIS_ORE,
-                rgb(.10f, .30f, 1f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_LAPIS_ORE,
-                rgb(.08f, .22f, .90f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.DIAMOND_ORE,
-                rgb(.10f, .95f, 1f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_DIAMOND_ORE,
-                rgb(.05f, .80f, 1f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.EMERALD_ORE,
-                rgb(.05f, 1f, .30f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.DEEPSLATE_EMERALD_ORE,
-                rgb(.03f, .90f, .25f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.NETHER_GOLD_ORE,
-                rgb(1f, .65f, .02f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.NETHER_QUARTZ_ORE,
-                rgb(1f, .85f, .75f)
-        );
-
-        ORE_COLORS.put(
-                Blocks.ANCIENT_DEBRIS,
-                rgb(.65f, .25f, .15f)
-        );
+        ORE_COLORS.put(Blocks.ANCIENT_DEBRIS, rgb(.65f, .25f, .15f));
     }
 
     private static float[] rgb(
@@ -196,11 +127,7 @@ public class OreHighlighterClient implements ClientModInitializer {
             float g,
             float b
     ) {
-        return new float[]{
-                r,
-                g,
-                b
-        };
+        return new float[]{r, g, b};
     }
 
     private static void scanOres(Minecraft client) {
@@ -257,7 +184,6 @@ public class OreHighlighterClient implements ClientModInitializer {
                             ORE_COLORS.get(block);
 
                     if (color != null) {
-
                         found.add(
                                 new Highlight(
                                         mutable.immutable(),
@@ -283,18 +209,8 @@ public class OreHighlighterClient implements ClientModInitializer {
         highlights.addAll(found);
     }
 
-    private static void renderOres(
-            LevelRenderEvents.AfterEntities context
-    ) {
-
-        if (!oreHighlightEnabled || highlights.isEmpty()) {
-            return;
-        }
-
-        WorldRendererAccess.renderHighlights(
-                context,
-                List.copyOf(highlights)
-        );
+    public static List<Highlight> getHighlights() {
+        return List.copyOf(highlights);
     }
 
     public static boolean isOreHighlightEnabled() {
@@ -304,17 +220,11 @@ public class OreHighlighterClient implements ClientModInitializer {
     public static void setOreHighlightEnabled(
             boolean enabled
     ) {
-
         oreHighlightEnabled = enabled;
-
         scanTimer = 0;
 
         if (!enabled) {
             highlights.clear();
         }
-    }
-
-    public static List<Highlight> getHighlights() {
-        return List.copyOf(highlights);
     }
 }
