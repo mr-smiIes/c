@@ -3,7 +3,6 @@ package com.wackyman.orehighlighter.client;
 import java.util.List;
 
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 
 import net.fabricmc.api.EnvType;
 import net.fabricmc.api.Environment;
@@ -12,7 +11,6 @@ import net.fabricmc.fabric.api.client.rendering.v1.level.LevelExtractionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderEvents;
 
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.core.BlockPos;
@@ -100,17 +98,16 @@ public final class OreWorldRenderer {
             collector.submitCustomGeometry(
                     matrices,
                     RenderTypes.lines(),
-                    (pose, consumer) -> {
-                        WorldRendererAccess.drawBox(
-                                pose,
-                                consumer,
-                                box,
-                                r,
-                                g,
-                                b,
-                                1.0f
-                        );
-                    }
+                    (pose, consumer) ->
+                            WorldRendererAccess.drawBox(
+                                    pose,
+                                    consumer,
+                                    box,
+                                    r,
+                                    g,
+                                    b,
+                                    1.0f
+                            )
             );
         }
 
