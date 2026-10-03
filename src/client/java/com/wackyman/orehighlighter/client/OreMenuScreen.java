@@ -1,4 +1,4 @@
-```java
+
 package com.wackyman.orehighlighter.client;
 
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -227,4 +227,4 @@ public class OreMenuScreen extends Screen {
         return false;
     }
 }
-```
+
