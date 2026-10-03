@@ -6,6 +6,7 @@ import java.util.OptionalDouble;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 
@@ -38,10 +39,13 @@ import org.joml.Vector4f;
 public final class OreWorldRenderer {
 
     /*
-     * Line pipeline with depth disabled.
+     * Minecraft 26.3's own LINES_SNIPPET uses:
      *
-     * This is what allows the ore outlines to remain visible
-     * through solid blocks.
+     * POSITION_COLOR_NORMAL_LINE_WIDTH
+     * PrimitiveTopology.LINES
+     *
+     * We keep the vanilla line shaders, but remove the depth test
+     * so ore outlines can be seen through blocks.
      */
     private static final RenderPipeline ORE_LINES_THROUGH_WALLS =
             RenderPipelines.register(
@@ -61,25 +65,25 @@ public final class OreWorldRenderer {
             );
 
     /*
-     * GPU staging buffer.
+     * The buffer format is explicitly the exact 26.3 line format.
      *
-     * StagedVertexBuffer handles the CPU -> GPU upload for us.
+     * This is intentionally NOT obtained from the pipeline at runtime.
      */
+    private static final VertexFormat LINE_VERTEX_FORMAT =
+            DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH;
+
+    private static final PrimitiveTopology LINE_PRIMITIVE =
+            PrimitiveTopology.LINES;
+
     private static final StagedVertexBuffer STAGED_BUFFER =
             new StagedVertexBuffer(
                     () -> "Ore Highlighter Buffer",
                     RenderType.SMALL_BUFFER_SIZE
             );
 
-    /*
-     * Render state.
-     */
     private static List<OreHighlighterClient.Highlight> highlights =
             List.of();
 
-    /*
-     * Dynamic uniform values.
-     */
     private static final Vector4f COLOR_MODULATOR =
             new Vector4f(
                     1.0f,
@@ -97,9 +101,6 @@ public final class OreWorldRenderer {
     private OreWorldRenderer() {
     }
 
-    /**
-     * Registers the world rendering callback.
-     */
     public static void initialize() {
 
         LevelRenderEvents.AFTER_TRANSLUCENT_TERRAIN.register(
@@ -107,29 +108,21 @@ public final class OreWorldRenderer {
         );
     }
 
-    /**
-     * Updates the list of ores to render.
-     */
     public static void setHighlights(
             List<OreHighlighterClient.Highlight> newHighlights
     ) {
 
-        if (newHighlights == null || newHighlights.isEmpty()) {
+        if (
+                newHighlights == null
+                        || newHighlights.isEmpty()
+        ) {
             highlights = List.of();
             return;
         }
 
-        /*
-         * Make our own immutable copy so the renderer cannot
-         * accidentally render a list while another part of
-         * the mod is modifying it.
-         */
         highlights = List.copyOf(newHighlights);
     }
 
-    /**
-     * Called during world rendering.
-     */
     private static void render(
             LevelRenderContext context
     ) {
@@ -138,66 +131,37 @@ public final class OreWorldRenderer {
             return;
         }
 
-        RenderPipeline pipeline =
-                ORE_LINES_THROUGH_WALLS;
-
-        VertexFormat format =
-                pipeline.getVertexFormatBinding(0);
-
-        if (format == null) {
-            return;
-        }
-
-        PrimitiveTopology primitive =
-                pipeline.getPrimitiveTopology();
-
         /*
-         * Create one draw for this frame.
+         * Use the exact Minecraft 26.3 line vertex format.
          */
         StagedVertexBuffer.Draw draw =
                 STAGED_BUFFER.appendDraw(
-                        format,
-                        primitive,
-                        primitive == PrimitiveTopology.QUADS
-                                ? RenderSystem
-                                        .getProjectionType()
-                                        .vertexSorting()
-                                : null
+                        LINE_VERTEX_FORMAT,
+                        LINE_PRIMITIVE
                 );
 
-        /*
-         * Write all ore boxes into the staged buffer.
-         */
         renderOres(
                 context,
                 draw
         );
 
-        /*
-         * Upload generated vertices.
-         */
         STAGED_BUFFER.upload();
 
         StagedVertexBuffer.ExecuteInfo info =
                 STAGED_BUFFER.getExecuteInfo(draw);
 
         if (info != null) {
+
             draw(
                     Minecraft.getInstance(),
                     info,
-                    pipeline
+                    ORE_LINES_THROUGH_WALLS
             );
         }
 
-        /*
-         * Finish this frame's staged-buffer work.
-         */
         STAGED_BUFFER.endFrame();
     }
 
-    /**
-     * Generates the actual ore geometry.
-     */
     private static void renderOres(
             LevelRenderContext context,
             StagedVertexBuffer.Draw draw
@@ -214,8 +178,7 @@ public final class OreWorldRenderer {
         poseStack.pushPose();
 
         /*
-         * Convert world coordinates into camera-relative
-         * coordinates.
+         * Convert world coordinates into camera-relative coordinates.
          */
         poseStack.translate(
                 -camera.x,
@@ -226,12 +189,9 @@ public final class OreWorldRenderer {
         VertexConsumer buffer =
                 STAGED_BUFFER.getVertexBuilder(draw);
 
-        /*
-         * Draw every highlighted ore.
-         *
-         * OreHighlighterClient already enforces the maximum
-         * of 100 highlighted ores.
-         */
+        Matrix4fc matrix =
+                poseStack.last().pose();
+
         for (
                 OreHighlighterClient.Highlight highlight
                         : highlights
@@ -241,7 +201,7 @@ public final class OreWorldRenderer {
                     highlight.pos();
 
             drawBox(
-                    poseStack.last().pose(),
+                    matrix,
                     buffer,
 
                     pos.getX(),
@@ -262,9 +222,6 @@ public final class OreWorldRenderer {
         poseStack.popPose();
     }
 
-    /**
-     * Draws the twelve edges of one Minecraft block.
-     */
     private static void drawBox(
             Matrix4fc matrix,
             VertexConsumer buffer,
@@ -284,7 +241,7 @@ public final class OreWorldRenderer {
     ) {
 
         /*
-         * Bottom square.
+         * Bottom.
          */
         line(
                 buffer,
@@ -319,7 +276,7 @@ public final class OreWorldRenderer {
         );
 
         /*
-         * Top square.
+         * Top.
          */
         line(
                 buffer,
@@ -354,7 +311,7 @@ public final class OreWorldRenderer {
         );
 
         /*
-         * Four vertical edges.
+         * Vertical edges.
          */
         line(
                 buffer,
@@ -389,20 +346,6 @@ public final class OreWorldRenderer {
         );
     }
 
-    /**
-     * Writes one complete line.
-     *
-     * IMPORTANT:
-     * LINES_SNIPPET requires:
-     *
-     * POSITION
-     * COLOR
-     * NORMAL
-     * LINE_WIDTH
-     *
-     * Every vertex is therefore fully populated before the
-     * next vertex is started.
-     */
     private static void line(
             VertexConsumer buffer,
             Matrix4fc matrix,
@@ -422,8 +365,16 @@ public final class OreWorldRenderer {
     ) {
 
         /*
-         * First endpoint.
+         * Minecraft 26.3's line format is:
+         *
+         * Position
+         * Color
+         * Normal
+         * LineWidth
+         *
+         * Every vertex MUST provide all four.
          */
+
         buffer.addVertex(
                 matrix,
                 x1,
@@ -445,9 +396,6 @@ public final class OreWorldRenderer {
                 2.0f
         );
 
-        /*
-         * Second endpoint.
-         */
         buffer.addVertex(
                 matrix,
                 x2,
@@ -470,18 +418,12 @@ public final class OreWorldRenderer {
         );
     }
 
-    /**
-     * Sends the generated geometry to the GPU.
-     */
     private static void draw(
             Minecraft client,
             StagedVertexBuffer.ExecuteInfo info,
             RenderPipeline pipeline
     ) {
 
-        /*
-         * Dynamic transformation uniforms.
-         */
         GpuBufferSlice dynamicTransforms =
                 RenderSystem
                         .getDynamicUniforms()
@@ -502,9 +444,6 @@ public final class OreWorldRenderer {
             return;
         }
 
-        /*
-         * Create the render pass.
-         */
         try (
                 RenderPass renderPass =
                         RenderSystem
@@ -526,18 +465,12 @@ public final class OreWorldRenderer {
                                 )
         ) {
 
-            /*
-             * Use the compiled pipeline.
-             */
             renderPass.setPipeline(
                     RenderSystem.getCompiledPipeline(
                             pipeline
                     )
             );
 
-            /*
-             * Bind Minecraft's normal rendering uniforms.
-             */
             RenderSystem.bindDefaultUniforms(
                     renderPass
             );
@@ -547,25 +480,16 @@ public final class OreWorldRenderer {
                     dynamicTransforms
             );
 
-            /*
-             * Bind our vertex buffer.
-             */
             renderPass.setVertexBuffer(
                     0,
                     info.vertexBuffer().slice()
             );
 
-            /*
-             * Bind the index buffer.
-             */
             renderPass.setIndexBuffer(
                     info.indexBuffer(),
                     info.indexType()
             );
 
-            /*
-             * Draw the lines.
-             */
             renderPass.drawIndexed(
                     info.indexCount(),
                     1,
@@ -576,11 +500,10 @@ public final class OreWorldRenderer {
         }
     }
 
-    /**
-     * Releases GPU resources.
-     */
     public static void close() {
+
         STAGED_BUFFER.close();
+
         highlights = List.of();
     }
 }
